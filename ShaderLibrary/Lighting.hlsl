@@ -18,6 +18,10 @@
     #define OUTPUT_SH(normalWS, OUT) OUT.xyz = SampleSHVertex(normalWS)
 #endif
 
+#ifdef _MAIN_LIGHT_SHADOWS_GRADIENT
+    TEXTURE2D(_ShadowGradientTexture);  SAMPLER(sampler_ShadowGradientTexture);
+#endif
+
 ///////////////////////////////////////////////////////////////////////////////
 //                      Lighting Functions                                   //
 ///////////////////////////////////////////////////////////////////////////////
@@ -34,6 +38,51 @@ half3 LightingSpecular(half3 lightColor, half3 lightDir, half3 normal, half3 vie
     half modifier = pow(NdotH, smoothness);
     half3 specularReflection = specular.rgb * modifier;
     return lightColor * specularReflection;
+}
+
+half3 CustomLightingPhysicallyBased(BRDFData brdfData, BRDFData brdfDataClearCoat,
+    half3 lightColor, half3 lightDirectionWS, half lightAttenuation,
+    half3 normalWS, half3 viewDirectionWS,
+    half clearCoatMask, bool specularHighlightsOff)
+{
+    half NdotL = saturate(dot(normalWS, lightDirectionWS));
+#ifdef _MAIN_LIGHT_SHADOWS_GRADIENT
+    half3 rampSampledColor = SAMPLE_TEXTURE2D_LOD(_ShadowGradientTexture, sampler_ShadowGradientTexture, half2(lightAttenuation, 0.5), 0).rgb;
+    half3 radiance = lightColor * (rampSampledColor * NdotL);
+#else
+    half3 radiance = lightColor * (lightAttenuation * NdotL);
+#endif
+
+    half3 brdf = brdfData.diffuse;
+#ifndef _SPECULARHIGHLIGHTS_OFF
+    [branch] if (!specularHighlightsOff)
+    {
+        brdf += brdfData.specular * DirectBRDFSpecular(brdfData, normalWS, lightDirectionWS, viewDirectionWS);
+
+#if defined(_CLEARCOAT) || defined(_CLEARCOATMAP)
+        // Clear coat evaluates the specular a second timw and has some common terms with the base specular.
+        // We rely on the compiler to merge these and compute them only once.
+        half brdfCoat = kDielectricSpec.r * DirectBRDFSpecular(brdfDataClearCoat, normalWS, lightDirectionWS, viewDirectionWS);
+
+            // Mix clear coat and base layer using khronos glTF recommended formula
+            // https://github.com/KhronosGroup/glTF/blob/master/extensions/2.0/Khronos/KHR_materials_clearcoat/README.md
+            // Use NoV for direct too instead of LoH as an optimization (NoV is light invariant).
+            half NoV = saturate(dot(normalWS, viewDirectionWS));
+            // Use slightly simpler fresnelTerm (Pow4 vs Pow5) as a small optimization.
+            // It is matching fresnel used in the GI/Env, so should produce a consistent clear coat blend (env vs. direct)
+            half coatFresnel = kDielectricSpec.x + kDielectricSpec.a * Pow4(1.0 - NoV);
+
+        brdf = brdf * (1.0 - clearCoatMask * coatFresnel) + brdfCoat * clearCoatMask;
+#endif // _CLEARCOAT
+    }
+#endif // _SPECULARHIGHLIGHTS_OFF
+
+    return brdf * radiance;
+}
+
+half3 CustomLightingPhysicallyBased(BRDFData brdfData, BRDFData brdfDataClearCoat, Light light, half3 normalWS, half3 viewDirectionWS, half clearCoatMask, bool specularHighlightsOff)
+{
+    return CustomLightingPhysicallyBased(brdfData, brdfDataClearCoat, light.color, light.direction, light.distanceAttenuation * light.shadowAttenuation, normalWS, viewDirectionWS, clearCoatMask, specularHighlightsOff);
 }
 
 half3 LightingPhysicallyBased(BRDFData brdfData, BRDFData brdfDataClearCoat,
@@ -284,10 +333,10 @@ half4 UniversalFragmentPBR(InputData inputData, SurfaceData surfaceData)
     if (IsMatchingLightLayer(mainLight.layerMask, meshRenderingLayers))
 #endif
     {
-        lightingData.mainLightColor = LightingPhysicallyBased(brdfData, brdfDataClearCoat,
-                                                              mainLight,
-                                                              inputData.normalWS, inputData.viewDirectionWS,
-                                                              surfaceData.clearCoatMask, specularHighlightsOff);
+        lightingData.mainLightColor = CustomLightingPhysicallyBased(brdfData, brdfDataClearCoat,
+                                                                    mainLight,
+                                                                    inputData.normalWS, inputData.viewDirectionWS,
+                                                                    surfaceData.clearCoatMask, specularHighlightsOff);
     }
 
     #if defined(_ADDITIONAL_LIGHTS)
