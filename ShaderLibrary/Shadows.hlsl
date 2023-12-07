@@ -48,6 +48,7 @@
 #endif
 
 SCREENSPACE_TEXTURE(_ScreenSpaceShadowmapTexture);
+SCREENSPACE_TEXTURE(_PerObjectScreenSpaceShadowmapTexture);
 
 TEXTURE2D_SHADOW(_MainLightShadowmapTexture);
 TEXTURE2D_SHADOW(_AdditionalLightsShadowmapTexture);
@@ -189,6 +190,11 @@ half SampleScreenSpaceShadowmap(float4 shadowCoord)
     half attenuation = SAMPLE_TEXTURE2D_ARRAY(_ScreenSpaceShadowmapTexture, sampler_PointClamp, shadowCoord.xy, unity_StereoEyeIndex).x;
 #else
     half attenuation = half(SAMPLE_TEXTURE2D(_ScreenSpaceShadowmapTexture, sampler_PointClamp, shadowCoord.xy).x);
+#endif
+    
+#if defined(_PEROBJECT_SCREEN_SPACE_SHADOW)
+    half objectAttenuation = half(SAMPLE_TEXTURE2D(_PerObjectScreenSpaceShadowmapTexture, sampler_PointClamp, shadowCoord.xy).x);
+    attenuation = min(attenuation, objectAttenuation);
 #endif
 
     return attenuation;

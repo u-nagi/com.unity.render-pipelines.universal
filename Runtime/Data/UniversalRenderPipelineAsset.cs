@@ -238,7 +238,8 @@ namespace UnityEngine.Rendering.Universal
         Sprite,
         UnityBuiltinDefault,
         SpriteMask,
-        Decal
+        Decal,
+        PerObjectShadow,
     }
 
     /// <summary>
@@ -853,6 +854,9 @@ namespace UnityEngine.Rendering.Universal
 
                 case DefaultMaterialType.Decal:
                     return editorResources.materials.decal;
+
+                case DefaultMaterialType.PerObjectShadow:
+                    return editorResources.materials.perObjectShadow;
 
                 // Unity Builtin Default
                 default:
@@ -1606,6 +1610,15 @@ namespace UnityEngine.Rendering.Universal
         public Material decalMaterial
         {
             get { return GetMaterial(DefaultMaterialType.Decal); }
+        }
+
+        /// <summary>
+        /// Returns the Material that Unity uses to render perObjectShadow.
+        /// </summary>
+        /// <returns>Returns the Material containing the perObjectShadow shader.</returns>
+        public Material perObjectShadowMaterial
+        {
+            get { return GetMaterial(DefaultMaterialType.PerObjectShadow); }
         }
 
         /// <summary>
