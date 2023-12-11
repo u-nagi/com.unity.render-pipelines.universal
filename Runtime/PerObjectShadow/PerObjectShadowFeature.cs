@@ -34,6 +34,10 @@ namespace UnityEngine.Rendering.Universal
                     return 2048;
                 case ShadowResolution._4096:
                     return 4096;
+                case ShadowResolution._8192:
+                    return 8192;
+                case ShadowResolution._16384:
+                    return 16384;
                 default: // backup
                     return 1024;
             }
